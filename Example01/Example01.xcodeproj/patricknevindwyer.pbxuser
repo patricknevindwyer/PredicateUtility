@@ -4,6 +4,9 @@
 		activeBuildConfigurationName = Debug;
 		activeExecutable = 8E86718812E7810600D21ED1 /* Example01 */;
 		activeTarget = 8D1107260486CEB800E47090 /* Example01 */;
+		addToTargets = (
+			8D1107260486CEB800E47090 /* Example01 */,
+		);
 		codeSenseManager = 8E86719B12E7810A00D21ED1 /* Code sense */;
 		executables = (
 			8E86718812E7810600D21ED1 /* Example01 */,
