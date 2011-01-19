@@ -83,7 +83,7 @@ class PredicateEditorManager(NSObject):
 		self._editor = None
 		self._isNesting = True
 		
-	def addCriteria(self, criteria, criteriaType=STRING, operators=[OP_EQ]):
+	def addCriteria(self, criteria, criteriaType=STRING, operators=_supportedOperatorTypes):
 		"""
 		Add a search criteria to the NSPredicateEditor. Optionally specify
 		the type of this criteria (defaults to String) and supported operators.
@@ -97,7 +97,7 @@ class PredicateEditorManager(NSObject):
 		"""
 		self.addMappedCriteria(criteria, criteria, criteriaType=criteriaType, operators=operators)
 	
-	def addMappedCriteria(self, niceName, backingName, criteriaType=STRING, operators=[OP_EQ]):
+	def addMappedCriteria(self, niceName, backingName, criteriaType=STRING, operators=_supportedOperatorTypes):
 		"""
 		Add a search criteria using a 'nice' name mapped to the actual criteria name. This makes
 		it fairly simple to have localized readable names mapped to backing column names that
@@ -298,7 +298,9 @@ class PredicateWrapper(object):
 		"""
 		Retrieve the backing criteria name for a given display name.
 		"""
-		
+		if self._criteria is None:
+			return dn
+			
 		for criteria in self._criteria:
 			if criteria['displayName'] == dn:
 				return criteria['backingName']

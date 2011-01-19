@@ -3,7 +3,6 @@
 #  Example01
 #
 #  Created by Patrick Dwyer on 1/19/11.
-#  Copyright Dwyer Devices, Inc 2011. All rights reserved.
 #
 
 from Foundation import *
@@ -25,7 +24,7 @@ class Example01AppDelegate(NSObject):
         # add a few search criteria
         self.predicateManager.addMappedCriteria("First Name", "firstname", operators = [PredicateEditorManager.OP_EQ, PredicateEditorManager.OP_BEGINSWITH])
         self.predicateManager.addMappedCriteria("Last Name", "lastname", operators = [PredicateEditorManager.OP_NE, PredicateEditorManager.OP_CONTAINS])
-        self.predicateManager.addCriteria("zipcode", operators = PredicateEditorManager._supportedOperatorTypes)
+        self.predicateManager.addCriteria("zipcode")
         
         # build the predicate manager
         self.predicateManager.build()
