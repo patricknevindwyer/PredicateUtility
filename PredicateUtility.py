@@ -20,11 +20,11 @@ classes in PredicateUtility can be used to generate this raw SQL.
 """
 import types
 
-from Foundation import NSObject, NSCompoundPredicate, NSNotPredicateType, NSOrPredicateType, NSAndPredicateType, NSComparisonPredicate, NSPredicate
+from Foundation import NSObject, NSCompoundPredicate, NSNotPredicateType, NSOrPredicateType, NSAndPredicateType, NSComparisonPredicate, NSPredicate, NSExpression, NSNumber, NSAnyPredicateModifier
 from CoreData import NSStringAttributeType, NSEqualToPredicateOperatorType, NSNotEqualToPredicateOperatorType, NSContainsPredicateOperatorType, NSBeginsWithPredicateOperatorType, NSEndsWithPredicateOperatorType
 from AppKit import NSPredicateEditorRowTemplate
 
-class CriteriaError(Error):
+class CriteriaError(Exception):
 	def __init__(self, msg):
 		self.msg = msg
 	def __repr__(self):
@@ -42,7 +42,7 @@ class PredicateEditorManager(NSObject):
 	"""
 	STRING = NSStringAttributeType
 	
-	OP_EQ = NSEqualtoPredicateOperatorType
+	OP_EQ = NSEqualToPredicateOperatorType
 	OP_NE = NSNotEqualToPredicateOperatorType
 	OP_CONTAINS = NSContainsPredicateOperatorType
 	OP_BEGINSWITH = NSBeginsWithPredicateOperatorType
@@ -55,7 +55,7 @@ class PredicateEditorManager(NSObject):
 		"""
 		Initialize a new Manager for an NSPredicateEditor
 		"""
-		self = super(MyClass, self).init()
+		self = super(PredicateEditorManager, self).init()
 		if self is None: return None
 		
 		self._initialize()
@@ -66,7 +66,7 @@ class PredicateEditorManager(NSObject):
 		"""
 		Initialize with an NSPredicateEditor
 		"""
-		self = super(MyClass, self).init()
+		self = super(PredicateEditorManager, self).init()
 		if self is None: return None
 		
 		self._initialize()
@@ -83,7 +83,7 @@ class PredicateEditorManager(NSObject):
 		self._editor = None
 		self._isNesting = True
 		
-	def addCriteria(self, criteria, criteriaType=PredicateEditorManager.STRING, operators=[PredicateEditorManager.OP_EQ]):
+	def addCriteria(self, criteria, criteriaType=STRING, operators=[OP_EQ]):
 		"""
 		Add a search criteria to the NSPredicateEditor. Optionally specify
 		the type of this criteria (defaults to String) and supported operators.
@@ -95,9 +95,9 @@ class PredicateEditorManager(NSObject):
 			manager.addCriteria("column2", operators = [manager.OP_BEGINSWITH, manager.OP_ENDSWITH])
 			
 		"""
-		self.addMappedColumn(criteria, criteria, criteriaType=criteriaType, operators=operators)
+		self.addMappedCriteria(criteria, criteria, criteriaType=criteriaType, operators=operators)
 	
-	def addMappedCriteria(self, niceName, backingName, criteriaType=PredicateEditorManager.STRING, operators=[PredicateEditorManager.OP_EQ]):
+	def addMappedCriteria(self, niceName, backingName, criteriaType=STRING, operators=[OP_EQ]):
 		"""
 		Add a search criteria using a 'nice' name mapped to the actual criteria name. This makes
 		it fairly simple to have localized readable names mapped to backing column names that
@@ -193,7 +193,13 @@ class PredicateEditorManager(NSObject):
 			wpred = PredicateWrapper(pred, criteria = criteria)
 			
 		"""
-		return PredicateWrapper(self.predicate())
+		return PredicateWrapper(self.predicate(), criteria = self._criteria)
+		
+	def addRow(self):
+		"""
+		Add a row to the NSPredicateEditor, which will otherwise be empty at startup.
+		"""
+		self._editor.addRow_(self)
 		
 class PredicateWrapper(object):
 	"""
@@ -236,6 +242,13 @@ class PredicateWrapper(object):
 		"""
 		sql = self._toSQL(self._predicate)
 		
+		# our generated sql will likely have parenthetical wrappers as a side effect of the
+		# recursion, remove these if they exist
+		if sql.startswith('('):
+			sql = sql[1:]
+		if sql.endswith(')'):
+			sql = sql[:-1]
+			
 		return sql
 	
 	def _toSQL(self, fpred):
@@ -244,55 +257,50 @@ class PredicateWrapper(object):
 		be directly called. Instead, call PredicateWrapper::toSQL()
 		"""
 		if type(fpred) == NSCompoundPredicate:
-            
-            compoundType = fpred.compoundPredicateType()
-            compoundOp = None
-            
-            if compoundType == NSNotPredicateType:
-                compoundOp = ' NOT '
-            elif compoundType == NSAndPredicateType:
-                compoundOp = ' AND '
-            elif compoundType == NSOrPredicateType:
-                compoundOp = ' OR '
-            
-            subClauses = []
-            for spred in fpred.subpredicates():
-                subClauses.append(self._toSQL(spred))
-            
-            return "(" + compoundOp.join(subClauses) + ")"
-        elif type(fpred) == NSPredicate:
-        
-        	# shouldn't ever really hit this directly
-            print "NSPredicate"
-            
-        elif type(fpred) == NSComparisonPredicate:
-            
-            # find the comparison column
-            lexp = fpred.leftExpression().constantValue()
-            compCol = self._backingNameForDisplayName(lexp)
-            
-            # find the sql comparator
-            mappedOp = self.OPERATORS[fpred.predicateOperatorType()]
-
-            op = mappedOp['op']
-			rexp = mappedOp['format'] % (fpred.rightExpression().constantValue())
 			
-            print "NSComparisonPredicate"
-            print "\tleft: ", compCol
-            print "\top: ", op
-            print "\tright: ", rexp
-            
-            return "%s %s \"%s\"" % (compCol, op, rexp)
-        else:
-            print "Unknown predicate type: ", type(fpred)
-            
-    def _backingNameForDisplayName(self, dn):
-    	"""
-    	Retrieve the backing criteria name for a given display name.
-    	"""
-    	
-    	for criteria in self._criteria:
-    		if criteria['displayName'] == dn:
-    			return criteria['backingName']
-    	
-    	return None
+			compoundType = fpred.compoundPredicateType()
+			compoundOp = None
+			
+			if compoundType == NSNotPredicateType:
+				compoundOp = ' NOT '
+			elif compoundType == NSAndPredicateType:
+				compoundOp = ' AND '
+			elif compoundType == NSOrPredicateType:
+				compoundOp = ' OR '
+			
+			subClauses = []
+			for spred in fpred.subpredicates():
+				subClauses.append(self._toSQL(spred))
+			
+			return "(" + compoundOp.join(subClauses) + ")"
+		elif type(fpred) == NSPredicate:
+		
+			# shouldn't ever really hit this directly
+			print "NSPredicate"
+			
+		elif type(fpred) == NSComparisonPredicate:
+			
+			# find the comparison column
+			lexp = fpred.leftExpression().constantValue()
+			compCol = self._backingNameForDisplayName(lexp)
+			
+			# find the sql comparator
+			mappedOp = self.OPERATORS[fpred.predicateOperatorType()]
+
+			op = mappedOp['op']
+			rexp = mappedOp['format'] % (fpred.rightExpression().constantValue())
+						
+			return "%s %s \"%s\"" % (compCol, op, rexp)
+		else:
+			print "Unknown predicate type: ", type(fpred)
+			
+	def _backingNameForDisplayName(self, dn):
+		"""
+		Retrieve the backing criteria name for a given display name.
+		"""
+		
+		for criteria in self._criteria:
+			if criteria['displayName'] == dn:
+				return criteria['backingName']
+		
+		return None
